@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { View, TouchableOpacity, StyleSheet } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
@@ -44,6 +45,9 @@ const FAB_TABS = ['Feed', 'Photos']
 
 export function MainTabs() {
   const { t } = useTranslation()
+  const insets = useSafeAreaInsets()
+  const bottomPadding = Math.max(24, insets.bottom)
+  const tabBarHeight = 60 + bottomPadding
   const navigation = useNavigation<any>()
   const [activeTab, setActiveTab] = useState('Feed')
 
@@ -76,7 +80,7 @@ export function MainTabs() {
         screenOptions={{
           headerShown: false,
           tabBarShowLabel: true,
-          tabBarStyle: styles.tabBar,
+          tabBarStyle: [styles.tabBar, { paddingBottom: bottomPadding, height: tabBarHeight }],
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: styles.tabLabel,
@@ -134,7 +138,7 @@ export function MainTabs() {
 
       {FAB_TABS.includes(activeTab) && (
         <TouchableOpacity
-          style={styles.fab}
+          style={[styles.fab, { bottom: tabBarHeight + 16 }]}
           onPress={() => navigation.navigate('NewPost')}
           accessibilityLabel={t('newPost.title')}
           accessibilityRole="button"
@@ -156,8 +160,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: 8,
-    paddingBottom: 24,
-    height: 84,
   },
   tabLabel: {
     fontFamily: 'Nunito_700Bold',
@@ -166,9 +168,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 18,
-    // Clear of the tab bar (84, which already includes the bottom safe-area
-    // padding) plus a comfortable margin.
-    bottom: 100,
     width: 56,
     height: 56,
     borderRadius: 28,
