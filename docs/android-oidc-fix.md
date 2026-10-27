@@ -19,6 +19,14 @@ The follow-up regression uses the real Expo AuthRequest/WebBrowser polyfill and 
 
 The rebuilt follow-up APK retains the diagnostic panel and signing key and advances its Android version code so it can update the installed test app. Successful actual-phone login remains an acceptance gate, not a conclusion from the automated regression.
 
+## Token-transport follow-up
+
+The next physical-phone trace confirms root matching is now accepted (`matches:true`, `auth_result:success`) and reaches `token_exchange_start`. It fails before completing exchange with `JSON Parse error: Unexpected character: <`. Sanitized NPM logs identify the native POST target as `/application/o/token` despite the correct configured `/application/o/token/`. Live unauthenticated invalid-code probes show the slash endpoint returns OAuth JSON400 while the stripped endpoint returns HTML404.
+
+Pinned `expo-auth-session@57.0.16` unconditionally removes the final slash inside `requestAsync`. A checked-in `patch-package` patch now removes only a serializer-added slash and retains a slash explicitly present in the original configured endpoint. Source, compiled JS and its regenerated source map are patched; mobile `postinstall` applies the exact-version patch and fails on application errors. No global fetch wrapper, proxy rewrite, IdP configuration change or replacement OAuth parser is introduced.
+
+The regression exercises the real Expo authorization-code exchange and its serialized URL/form body. A live request through the patched transport reaches the exact slash endpoint and parses the expected `invalid_grant` JSON for a deliberately invalid code; that transport probe is not a successful account login. A clean mobile `npm ci` (with the local API client's built `dist` prerequisite) reapplies the patch, with all three resulting files hash-identical to the tested dependency.
+
 ## Scope and mechanism
 
 An Android user running the official 0.8.2 app with Firefox can authenticate at the identity provider and return to Famlin without getting an app session. The observed native attempts did not proceed to code exchange. The exact phone event trace has not been captured; this change fixes a deterministically reproduced library race consistent with that symptom, not every possible login failure.
