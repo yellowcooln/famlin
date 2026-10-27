@@ -1,8 +1,10 @@
 import * as WebBrowser from 'expo-web-browser'
 import * as AuthSession from 'expo-auth-session'
 import * as Linking from 'expo-linking'
+import { getRandomBytesAsync } from 'expo-crypto'
 
 import i18n from '@/i18n'
+import { withAndroidAuthRedirect } from './oidcAuthSession'
 import { OidcConfig, LoginResponse, loginWithOidc, exchangeOidcMobileHandoff } from '@/api/auth'
 
 export class OidcCancelledError extends Error {}
@@ -61,7 +63,11 @@ async function performPkceLogin(config: OidcConfig, inviteToken?: string): Promi
     usePKCE: true,
   })
 
-  const result = await authRequest.promptAsync(discovery)
+  const result = await withAndroidAuthRedirect(
+    redirectUri,
+    () => authRequest.promptAsync(discovery),
+    (url) => authRequest.parseReturnUrl(url)
+  )
   if (result.type === 'error') {
     throw new Error(result.error?.message || i18n.t('login.ssoLoginFailed'))
   }
@@ -93,7 +99,6 @@ async function performPkceLogin(config: OidcConfig, inviteToken?: string): Promi
 // APP_CALLBACK_URI with a one-time handoff code, which is what
 // openAuthSessionAsync is actually watching for here.
 async function performServerMediatedLogin(config: OidcConfig, inviteToken?: string): Promise<LoginResponse> {
-  const { getRandomBytesAsync } = await import('expo-crypto')
   const nonceBytes = await getRandomBytesAsync(16)
   const nonce = Array.from(nonceBytes)
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -107,7 +112,11 @@ async function performServerMediatedLogin(config: OidcConfig, inviteToken?: stri
     state,
   }).toString()}`
 
-  const result = await WebBrowser.openAuthSessionAsync(authUrl, APP_CALLBACK_URI)
+  const result = await withAndroidAuthRedirect<WebBrowser.WebBrowserAuthSessionResult>(
+    APP_CALLBACK_URI,
+    () => WebBrowser.openAuthSessionAsync(authUrl, APP_CALLBACK_URI),
+    (url) => ({ type: 'success', url })
+  )
   if (result.type !== 'success' || !result.url) {
     throw new OidcCancelledError()
   }
