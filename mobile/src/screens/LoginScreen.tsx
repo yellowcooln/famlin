@@ -18,10 +18,12 @@ import { useTranslation } from 'react-i18next'
 import { Icon } from '@/components/Icon'
 import { AppleSignInButton } from '@/components/AppleSignInButton'
 import { PhotoCollage } from '@/components/PhotoCollage'
+import { OidcDiagnosticsPanel } from '@/components/OidcDiagnosticsPanel'
 import { colors } from '@/constants/colors'
 import { useAuthStore } from '@/stores/authStore'
 import { fetchOidcConfig, loginWithPassword, OidcConfig } from '@/api/auth'
 import { performOidcLogin, OidcCancelledError } from '@/utils/oidcLogin'
+import { recordOidcDiagnostic } from '@/utils/oidcDiagnostics'
 import { useAppleSignInAvailable } from '@/utils/appleLogin'
 import { getServerUrl, setLanguage, setServerUrl as persistServerUrl } from '@/utils/storage'
 import { SUPPORTED_LANGUAGES, SupportedLanguage } from '@/i18n'
@@ -108,6 +110,7 @@ export function LoginScreen() {
   }
 
   async function handleSsoLogin() {
+    recordOidcDiagnostic('login_pressed')
     setApiBaseUrl(serverUrl)
     setIsSsoLoading(true)
     try {
@@ -118,9 +121,15 @@ export function LoginScreen() {
       }
 
       const loginResult = await performOidcLogin(config)
+      recordOidcDiagnostic('session_save_start')
       await setAuth(loginResult.user, loginResult.token, serverUrl)
+      recordOidcDiagnostic('session_save_complete')
     } catch (err: any) {
-      if (err instanceof OidcCancelledError) return
+      if (err instanceof OidcCancelledError) {
+        recordOidcDiagnostic('login_cancelled')
+        return
+      }
+      recordOidcDiagnostic('login_error', { httpStatus: err.response?.status })
       Alert.alert(t('login.alerts.loginFailedTitle'), err.response?.data?.error || err.message || t('common.tryAgain'))
     } finally {
       setIsSsoLoading(false)
@@ -295,6 +304,8 @@ export function LoginScreen() {
               <Text style={styles.hint}>{t('login.invitationOnly')}</Text>
             </Animated.View>
           )}
+
+          <OidcDiagnosticsPanel />
 
           {/* Before sign-in there's no Profile tab yet, so the device-language
             default needs its own way out here. */}

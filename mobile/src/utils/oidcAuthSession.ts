@@ -1,6 +1,7 @@
 import { Platform } from 'react-native'
 import * as Linking from 'expo-linking'
 import i18n from '@/i18n'
+import { recordOidcDiagnostic, summarizeOidcUrl } from './oidcDiagnostics'
 
 // Expo's Android auth-session polyfill races AppState foreground against
 // the Linking event. Firefox can foreground us first, causing Expo to return
@@ -30,12 +31,18 @@ export async function withAndroidAuthRedirect<T extends { type: string }>(
     // dismissal. Match the exact callback route, not arbitrary scheme-prefix
     // links. The caller must still validate OAuth state via the original parser.
     subscription = Linking.addEventListener('url', ({ url }) => {
+      recordOidcDiagnostic('callback_seen', {
+        ...summarizeOidcUrl(url),
+        matches: url.split(/[?#]/, 1)[0] === redirectUri,
+      })
       if (url.split(/[?#]/, 1)[0] === redirectUri && callbackUrl === undefined) {
         callbackUrl = url
         resolveCallback(url)
       }
     })
+    recordOidcDiagnostic('auth_prompt')
     const result = await start()
+    recordOidcDiagnostic('browser_result', { result: result.type })
     if (result.type !== 'dismiss' && result.type !== 'cancel') return result
     if (callbackUrl !== undefined) return parseReturnUrl(callbackUrl)
 
@@ -45,6 +52,7 @@ export async function withAndroidAuthRedirect<T extends { type: string }>(
         timer = setTimeout(() => resolve(undefined), REDIRECT_GRACE_MS)
       }),
     ])
+    if (lateCallback === undefined) recordOidcDiagnostic('callback_timeout')
     return lateCallback === undefined ? result : parseReturnUrl(lateCallback)
   } finally {
     if (timer !== undefined) clearTimeout(timer)

@@ -2,6 +2,15 @@
 
 Branch: `fix/android-oidc-callback` in `yellowcooln/famlin`.
 
+## Device result and diagnostic follow-up
+
+The signed test APK built from `ad07c9b` was tried on Android with Firefox and **still returned to Famlin without signing in**. The library race is reproduced, but it has not been established as the cause of the actual device failure. Do not describe that APK as a confirmed fix or ask the user to repeat browser-switching/settings workarounds.
+
+An explicit `EXPO_PUBLIC_OIDC_DIAGNOSTICS=1` build adds a login-screen **Sign-in diagnostics** panel. It observes startup/initial URLs, warm URL events, app lifecycle, browser/auth results, callback presence and token/session/save progress. The bounded local report records fixed event categories, timestamps, runtime identifiers, booleans and optional HTTP status only; it never records callback URLs or code/state/token values, passwords, account identity or family content. Tests cover redaction, stored-data sanitization, bounded/reloaded history, unavailable storage and disabled ordinary builds. Sharing requires an explicit user action and opens the OS share sheet for a local text file; there is no automatic telemetry endpoint. This build is for collecting evidence, not another claimed repair.
+
+The diagnostic APK uses the same persistent test signing key and a higher Android version code, so it can update the first test APK without uninstalling it. It still cannot update a Play-signed official APK. Try sign-in once, then use Sign-in diagnostics → Share diagnostics to provide the report. A new runtime with an initial callback versus a surviving runtime with a missing/late warm callback discriminates cold-start/process recreation from promise/event delivery failure.
+
+
 ## Scope and mechanism
 
 An Android user running the official 0.8.2 app with Firefox can authenticate at the identity provider and return to Famlin without getting an app session. The observed native attempts did not proceed to code exchange. The exact phone event trace has not been captured; this change fixes a deterministically reproduced library race consistent with that symptom, not every possible login failure.

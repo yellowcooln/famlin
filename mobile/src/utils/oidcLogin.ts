@@ -5,6 +5,7 @@ import { getRandomBytesAsync } from 'expo-crypto'
 
 import i18n from '@/i18n'
 import { withAndroidAuthRedirect } from './oidcAuthSession'
+import { recordOidcDiagnostic } from './oidcDiagnostics'
 import { OidcConfig, LoginResponse, loginWithOidc, exchangeOidcMobileHandoff } from '@/api/auth'
 
 export class OidcCancelledError extends Error {}
@@ -43,6 +44,7 @@ function getServerMediatedErrorMessage(code: string | string[] | undefined): str
 // itself. Google (config.usesClientSecret) doesn't, so it goes through
 // performServerMediatedLogin instead — see docs/docs/admin-configuration.md.
 export async function performOidcLogin(config: OidcConfig, inviteToken?: string): Promise<LoginResponse> {
+  recordOidcDiagnostic('auth_begin', { usesClientSecret: config.usesClientSecret })
   if (config.usesClientSecret && config.mobileCallbackUrl) {
     return performServerMediatedLogin(config, inviteToken)
   }
@@ -68,6 +70,10 @@ async function performPkceLogin(config: OidcConfig, inviteToken?: string): Promi
     () => authRequest.promptAsync(discovery),
     (url) => authRequest.parseReturnUrl(url)
   )
+  recordOidcDiagnostic('auth_result', {
+    result: result.type,
+    hasCode: 'params' in result && typeof result.params.code === 'string',
+  })
   if (result.type === 'error') {
     throw new Error(result.error?.message || i18n.t('login.ssoLoginFailed'))
   }
@@ -75,6 +81,7 @@ async function performPkceLogin(config: OidcConfig, inviteToken?: string): Promi
     throw new OidcCancelledError()
   }
 
+  recordOidcDiagnostic('token_exchange_start')
   const tokenResult = await AuthSession.exchangeCodeAsync(
     {
       clientId: config.clientId,
@@ -85,11 +92,15 @@ async function performPkceLogin(config: OidcConfig, inviteToken?: string): Promi
     discovery
   )
 
+  recordOidcDiagnostic('token_exchange_complete')
   if (!tokenResult.idToken) {
     throw new Error(i18n.t('login.ssoNoIdToken'))
   }
 
-  return loginWithOidc(tokenResult.idToken, inviteToken)
+  recordOidcDiagnostic('session_request')
+  const session = await loginWithOidc(tokenResult.idToken, inviteToken)
+  recordOidcDiagnostic('session_response')
+  return session
 }
 
 // redirect_uri sent to the provider is config.mobileCallbackUrl (an HTTPS URL
@@ -117,6 +128,7 @@ async function performServerMediatedLogin(config: OidcConfig, inviteToken?: stri
     () => WebBrowser.openAuthSessionAsync(authUrl, APP_CALLBACK_URI),
     (url) => ({ type: 'success', url })
   )
+  recordOidcDiagnostic('auth_result', { result: result.type })
   if (result.type !== 'success' || !result.url) {
     throw new OidcCancelledError()
   }
@@ -135,5 +147,8 @@ async function performServerMediatedLogin(config: OidcConfig, inviteToken?: stri
     throw new Error(i18n.t('login.ssoLoginFailed'))
   }
 
-  return exchangeOidcMobileHandoff(handoff)
+  recordOidcDiagnostic('session_request')
+  const session = await exchangeOidcMobileHandoff(handoff)
+  recordOidcDiagnostic('session_response')
+  return session
 }
