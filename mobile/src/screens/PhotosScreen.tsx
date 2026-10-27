@@ -12,7 +12,7 @@ import {
   SectionList,
 } from 'react-native'
 import { Image } from 'expo-image'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { TabScreen } from '@/components/TabScreen'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -288,7 +288,7 @@ export function PhotosScreen() {
   }, [albums, openAlbum, t])
 
   return (
-    <SafeAreaView style={styles.container}>
+    <TabScreen style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
       {/* Header */}
@@ -400,7 +400,7 @@ export function PhotosScreen() {
       ) : (
         <EmptyState title={t('feed.noGroupsTitle')} subtitle={t('feed.noGroupsSubtitle')} />
       )}
-    </SafeAreaView>
+    </TabScreen>
   )
 }
 

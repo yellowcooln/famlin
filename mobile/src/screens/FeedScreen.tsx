@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { TabScreen } from '@/components/TabScreen'
 import { useNavigation } from '@react-navigation/native'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -129,7 +129,7 @@ export function FeedScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <TabScreen style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <BrandLogo size={36} />
@@ -287,7 +287,7 @@ export function FeedScreen() {
           )
         }
       />
-    </SafeAreaView>
+    </TabScreen>
   )
 }
 

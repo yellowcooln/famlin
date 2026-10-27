@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native'
 import { KeyboardAwareScrollView } from '@/components/KeyboardAware'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { TabScreen } from '@/components/TabScreen'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import * as ImagePicker from 'expo-image-picker'
@@ -186,7 +186,7 @@ export function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <TabScreen style={styles.container}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>{t('profile.title')}</Text>
@@ -409,7 +409,7 @@ export function ProfileScreen() {
           onSelect={handleLanguageChange}
         />
       </KeyboardAwareScrollView>
-    </SafeAreaView>
+    </TabScreen>
   )
 }
 
