@@ -33,7 +33,14 @@ jest.mock('expo-crypto', () => {
 jest.mock('@/i18n', () => ({ __esModule: true, default: { t: (key: string) => key } }))
 jest.mock('@/api/auth', () => ({ loginWithOidc: jest.fn(), exchangeOidcMobileHandoff: jest.fn() }))
 
-it('completes login through the real Expo polyfill when foreground precedes the Linking callback', async () => {
+it.each([
+  ['famlin://', 'foreground-first'],
+  ['famlin:/', 'callback-first'],
+  ['famlin:///', 'callback-first'],
+  ['famlin:', 'callback-first'],
+  ['famlin://', 'callback-first'],
+])('completes real Expo login for root callback %s with %s ordering', async (callbackBase, order) => {
+  jest.clearAllMocks()
   jest.useFakeTimers()
   Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true })
   const states = new Set<(state: AppStateStatus) => void>()
@@ -73,13 +80,30 @@ it('completes login through the real Expo polyfill when foreground precedes the 
     const authUrl = jest.mocked(NativeBrowser.openBrowserAsync).mock.calls[0][0] as string
     const state = new URL(authUrl).searchParams.get('state')!
     for (const listener of states) listener('background')
+    if (order === 'callback-first') {
+      for (const listener of [...links]) listener({ url: `${callbackBase}?code=fixture-code&state=${state}` })
+      await jest.advanceTimersByTimeAsync(20)
+    }
     for (const listener of states) listener('active')
     // Let the real polyfill observe foreground, return dismiss and remove its
     // own listener. The app-owned listener must survive that cleanup.
     await jest.advanceTimersByTimeAsync(50)
-    for (const listener of links) listener({ url: `famlin://?code=fixture-code&state=${state}` })
+    if (order === 'foreground-first') {
+      for (const listener of [...links]) listener({ url: `${callbackBase}?code=fixture-code&state=${state}` })
+    }
+    await jest.advanceTimersByTimeAsync(1001)
     expect(await outcome).toEqual({ value: session })
     expect(AuthSession.exchangeCodeAsync).toHaveBeenCalledTimes(1)
+    // The token endpoint must receive the original registered redirect URI,
+    // not the browser's alternate serialization of the callback.
+    expect(AuthSession.exchangeCodeAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: 'famlin://',
+        code: 'fixture-code',
+        extraParams: { code_verifier: expect.any(String) },
+      }),
+      expect.any(Object)
+    )
     expect(links.size).toBe(0)
     expect(states.size).toBe(0)
     expect(jest.getTimerCount()).toBe(0)

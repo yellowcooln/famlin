@@ -7,6 +7,9 @@ import { recordOidcDiagnostic, summarizeOidcUrl } from './oidcDiagnostics'
 // the Linking event. Firefox can foreground us first, causing Expo to return
 // dismiss and remove its listener before the callback is delivered.
 const REDIRECT_GRACE_MS = 1000
+// Empty-authority app roots can be serialized with zero, one, two or three
+// slashes. Do not extend this equivalence to hosts, named routes or web URLs.
+const HOSTLESS_APP_ROOT = /^famlin:\/{0,3}$/i
 let activeAndroidSession = false
 
 export async function withAndroidAuthRedirect<T extends { type: string }>(
@@ -31,11 +34,13 @@ export async function withAndroidAuthRedirect<T extends { type: string }>(
     // dismissal. Match the exact callback route, not arbitrary scheme-prefix
     // links. The caller must still validate OAuth state via the original parser.
     subscription = Linking.addEventListener('url', ({ url }) => {
+      const base = url.split(/[?#]/, 1)[0]
+      const matches = base === redirectUri || (HOSTLESS_APP_ROOT.test(base) && HOSTLESS_APP_ROOT.test(redirectUri))
       recordOidcDiagnostic('callback_seen', {
         ...summarizeOidcUrl(url),
-        matches: url.split(/[?#]/, 1)[0] === redirectUri,
+        matches,
       })
-      if (url.split(/[?#]/, 1)[0] === redirectUri && callbackUrl === undefined) {
+      if (matches && callbackUrl === undefined) {
         callbackUrl = url
         resolveCallback(url)
       }

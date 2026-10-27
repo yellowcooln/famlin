@@ -113,20 +113,23 @@ it('completes server-mediated handoff when Android delivers its callback after d
   expect(mockLinkListeners.size).toBe(0)
 })
 
-it('rejects a late PKCE callback with mismatched OAuth state', async () => {
-  jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(async (_authUrl, returnUrl) => {
-    setTimeout(() => {
-      for (const listener of mockLinkListeners) listener({ url: `${returnUrl}?code=fixture-code&state=wrong` })
-    }, 50)
-    return { type: 'dismiss' } as WebBrowser.WebBrowserAuthSessionResult
-  })
-  const outcome = performOidcLogin(config).catch((error: Error) => error.message)
-  await jest.advanceTimersByTimeAsync(100)
-  expect(await outcome).toContain('state')
-  expect(AuthSession.exchangeCodeAsync).not.toHaveBeenCalled()
-  expect(loginWithOidc).not.toHaveBeenCalled()
-  expect(mockLinkListeners.size).toBe(0)
-})
+it.each(['famlin://', 'famlin:/', 'famlin:', 'famlin:///'])(
+  'rejects mismatched OAuth state for %s',
+  async (callbackBase) => {
+    jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(async () => {
+      setTimeout(() => {
+        for (const listener of mockLinkListeners) listener({ url: `${callbackBase}?code=fixture-code&state=wrong` })
+      }, 50)
+      return { type: 'dismiss' } as WebBrowser.WebBrowserAuthSessionResult
+    })
+    const outcome = performOidcLogin(config).catch((error: Error) => error.message)
+    await jest.advanceTimersByTimeAsync(100)
+    expect(await outcome).toContain('state')
+    expect(AuthSession.exchangeCodeAsync).not.toHaveBeenCalled()
+    expect(loginWithOidc).not.toHaveBeenCalled()
+    expect(mockLinkListeners.size).toBe(0)
+  }
+)
 
 it.each(['dismiss', 'cancel'] as const)('still cancels after %s when no callback arrives', async (type) => {
   jest.mocked(WebBrowser.openAuthSessionAsync).mockResolvedValue({ type } as WebBrowser.WebBrowserAuthSessionResult)
@@ -142,7 +145,15 @@ it('ignores invite links and lookalike callback routes even with the correct sta
   jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(async (authUrl) => {
     const state = new URL(authUrl).searchParams.get('state')!
     setTimeout(() => {
-      for (const url of ['famlin://invite/fixture', 'famlin://other', 'famlin://evil']) {
+      for (const url of [
+        'famlin://invite/fixture',
+        'famlin://other',
+        'famlin://evil',
+        'famlin:/extra',
+        'famlin:////',
+        'other:/',
+        'https://example.com/',
+      ]) {
         for (const listener of mockLinkListeners) listener({ url: `${url}?code=fixture-code&state=${state}` })
       }
     }, 50)
@@ -238,5 +249,33 @@ it('rejects an overlapping login while waiting for the first callback', async ()
   expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledTimes(1)
   await jest.advanceTimersByTimeAsync(1001)
   expect(await first).toBeInstanceOf(OidcCancelledError)
+  expect(mockLinkListeners.size).toBe(0)
+})
+
+it('does not broaden a named server-mediated callback to other root, host or path forms', async () => {
+  jest.mocked(WebBrowser.openAuthSessionAsync).mockImplementation(async (authUrl) => {
+    const state = new URL(authUrl).searchParams.get('state')!
+    setTimeout(() => {
+      for (const base of [
+        'famlin:/oidc-callback',
+        'famlin://oidc-callback.evil',
+        'famlin://oidc-callback/extra',
+        'famlin:',
+        'famlin:///',
+      ]) {
+        for (const listener of mockLinkListeners)
+          listener({ url: `${base}?handoff=fixture-handoff&state=${encodeURIComponent(state)}` })
+      }
+    }, 20)
+    return { type: 'dismiss' } as WebBrowser.WebBrowserAuthSessionResult
+  })
+  const outcome = performOidcLogin({
+    ...config,
+    usesClientSecret: true,
+    mobileCallbackUrl: 'https://family.example/api/auth/oidc/mobile-callback',
+  }).catch((error: Error) => error)
+  await jest.advanceTimersByTimeAsync(1001)
+  expect(await outcome).toBeInstanceOf(OidcCancelledError)
+  expect(exchangeOidcMobileHandoff).not.toHaveBeenCalled()
   expect(mockLinkListeners.size).toBe(0)
 })

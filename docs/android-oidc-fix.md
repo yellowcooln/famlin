@@ -11,6 +11,14 @@ An explicit `EXPO_PUBLIC_OIDC_DIAGNOSTICS=1` build adds a login-screen **Sign-in
 The diagnostic APK uses the same persistent test signing key and a higher Android version code, so it can update the first test APK without uninstalling it. It still cannot update a Play-signed official APK. Try sign-in once, then use Sign-in diagnostics → Share diagnostics to provide the report. A new runtime with an initial callback versus a surviving runtime with a missing/late warm callback discriminates cold-start/process recreation from promise/event delivery failure.
 
 
+## Finding from the device diagnostics
+
+Both supplied attempts received a root callback with code and state present, no provider error, and `matches: false`. The callback preceded foreground by 17 ms and 28 ms respectively; the original JavaScript runtime survived each attempt. The failing boundary is callback-route acceptance, not a late callback or app restart in those attempts. The privacy-preserving report does not contain the literal returned URI, so it does not establish which slash serialization was delivered. Read-only proxy logs confirm the authorization request still registers `famlin://` with S256.
+
+The follow-up regression uses the real Expo AuthRequest/WebBrowser polyfill and callback-before-foreground ordering. Original matching reproduces cancellation for hostless root forms such as `famlin:/` and `famlin:`. The follow-up accepts only the equivalent `famlin:` root representations with zero through three slashes; it does not generalize host/path matching, accept other schemes, or rewrite the configured redirect URI. Token exchange continues sending the original `famlin://`; original state validation and S256 verifier remain mandatory. Named server-mediated callbacks remain exact. Negative tests cover wrong state for every root form, other schemes/hosts/paths and slash lookalikes.
+
+The rebuilt follow-up APK retains the diagnostic panel and signing key and advances its Android version code so it can update the installed test app. Successful actual-phone login remains an acceptance gate, not a conclusion from the automated regression.
+
 ## Scope and mechanism
 
 An Android user running the official 0.8.2 app with Firefox can authenticate at the identity provider and return to Famlin without getting an app session. The observed native attempts did not proceed to code exchange. The exact phone event trace has not been captured; this change fixes a deterministically reproduced library race consistent with that symptom, not every possible login failure.
